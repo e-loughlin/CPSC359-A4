@@ -30,8 +30,8 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
+#include <unistd.h>
 
-#define RPI2
 
 // Definitions of memory addresses for GPIO and BSC1
 
@@ -73,18 +73,18 @@ extern struct bcm2835_peripheral bsc1;
                                                         // define a read or write operation, and start
                                                         // a transfer.
                                                         
-#define BSC1_STATUS         *(bsc1.addr + 0x04)         // Status register is used to record activity
+#define BSC1_STATUS         *(bsc1.addr + 0x01)         // Status register is used to record activity
 														// status, errors and interrupt requests.
 														
-#define BSC1_DLEN			*(bsc1.addr + 0x08)			// Data length register defines the number of 
+#define BSC1_DLEN			*(bsc1.addr + 0x02)			// Data length register defines the number of 
 														// bytes of data to transmit or receive in the 
 														// I2C transfer. 
 
-#define BSC1_SLAVEADDR		*(bsc1.addr + 0x0c)			// Slave Address register specifies the slave
+#define BSC1_SLAVEADDR		*(bsc1.addr + 0x03)			// Slave Address register specifies the slave
 														// address and cycle type. (Slave is defined 
 														// as the peripheral device)
 														
-#define BSC1_FIFO			*(bsc1.addr + 0x10)			// FIFO (First In First Out) Register.
+#define BSC1_FIFO			*(bsc1.addr + 0x04)			// FIFO (First In First Out) Register.
 														// Read cycles acces data received from the bus.
 														// Writes to the register adds to stack.
 														// Reads from register remove the next item.

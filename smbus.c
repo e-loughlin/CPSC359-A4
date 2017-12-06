@@ -144,6 +144,7 @@ int init()
 
   printf( "mmap successful: %08x\n", BSC1_BASE );
 
+  // Initialize the GPIO pins.
   i2c_init();
   
 }
@@ -161,12 +162,10 @@ void uninit()
 
 unsigned char read_byte_data(unsigned char address, unsigned char regAddress) 
 {
-
-  init();
-
+  
+  BSC1_STATUS = CLEAR_STATUS; 							// Clear CLKT, ERR, DONE flags
   BSC1_SLAVEADDR = address;  							// Set peripheral address
   BSC1_DLEN = 1;        				 				// Set length of data to be transmitted to 1 byte
-  BSC1_STATUS = CLEAR_STATUS; 							// Clear CLKT, ERR, DONE flags
   BSC1_FIFO = regAddress;  								// Add the peripheral's offset register to FIFO stack
   BSC1_CONTROL = START_WRITE;  							// I2CEN, ST set to 1 (Enable I2C and Start Transfer)
 
@@ -174,17 +173,35 @@ unsigned char read_byte_data(unsigned char address, unsigned char regAddress)
   wait_i2c_done();
   
   // Get the response from the register
-  BSC1_DLEN = 1;        				 				// Set length of data to be transmitted to 1 byte
   BSC1_STATUS = CLEAR_STATUS; 							// Clear CLKT, ERR, DONE flags
+  BSC1_DLEN = 1;        				 				// Set length of data to be transmitted to 1 byte
   BSC1_CONTROL = START_READ;  							// I2CEN, ST set to 1 (Enable I2C and Start Transfer)
+  
 
   // Wait until done
   wait_i2c_done();
 
   unsigned int data = BSC1_FIFO;
-  return data;
+  BSC1_STATUS = CLEAR_STATUS;
+  BSC1_CONTROL |= BSC_C_CLEAR;
   
-  uninit();
-	
+  return data;
+}
+
+
+void write_byte_data(unsigned char address, unsigned char regAddress, unsigned char data)
+{
+  BSC1_STATUS = CLEAR_STATUS; 							// Clear CLKT, ERR, DONE flags
+  BSC1_SLAVEADDR = address;  							// Set peripheral address
+  BSC1_DLEN = 2;        				 				// Set length of data to be transmitted to 2 byte
+  BSC1_FIFO = regAddress;  								// Add the peripheral's offset register to FIFO stack  
+  BSC1_FIFO = data;		  								// Add the data to FIFO stack
+  BSC1_CONTROL = START_WRITE;  							// I2CEN, ST set to 1 (Enable I2C and Start Transfer)
+  
+  // Wait until done
+  wait_i2c_done();
+  
+  BSC1_CONTROL |= BSC_C_CLEAR;							// Clear the FIFO slack.
+ 	
 }
 
