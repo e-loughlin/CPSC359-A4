@@ -1,0 +1,11 @@
+cdef extern from "smbus.c":
+	cpdef int map_peripheral(struct bcm2835_peripheral *p)
+	cpdef void unmap_peripheral(struct bcm2835_peripheral *p)
+	cpdef void dump_bsc_status()
+	cpdef void wait_i2c_done() 
+	cpdef void i2c_init()
+	cpdef int SetProgramPriority(int priorityLevel)
+	cpdef int init()
+	cpdef void uninit()
+	cpdef unsigned char read_byte_data(unsigned char address, unsigned char regAddress)
+	cpdef void write_byte_data(unsigned char address, unsigned char regAddress, unsigned char data)
