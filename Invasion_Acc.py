@@ -9,8 +9,6 @@
 
 # 2017-09-19 - modified by JE Boyd for python3
 
-
-import explorerhat as hat
 import time
 import mySMBus as bus
 

@@ -1,21 +1,22 @@
 cdef extern int fd
 cdef extern unsigned int *bsc1
 cdef extern unsigned int *gpio
-cdef extern int c_init()
-cdef extern void c_uninit()
-cdef extern unsigned char readByte(unsigned char address, unsigned char regAddress)
-cdef extern void writeByte(unsigned char address, unsigned char regAddress, unsigned char data)
+cdef extern int init()
+cdef extern void uninit()
+cdef extern unsigned char read_byte(unsigned char address, unsigned char regAddress)
+cdef extern void write_byte(unsigned char address, unsigned char regAddress, unsigned char data)
 
-def open():
-	c_init()
+def open(int x):
+	init()
 	
 def close(int x):
-	c_uninit()
+	uninit()
 	
 def read_byte_data(address, regAddress):
-	return readByte(address, regAddress)
+	x= read_byte(address, regAddress)
+	return x
 	
 def write_byte_data(address, regAddress, data):
-	writeByte(address, regAddress, data)
+	write_byte(address, regAddress, data)
 	return
 
