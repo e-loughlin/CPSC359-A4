@@ -13,7 +13,7 @@
  * 
  * Reference materials:
  * 1) https://github.com/Pieter-Jan/PJ_RPI
- * 2) CPSC 359 Course Material, special help from Andrew Groene and Dr. Boyd.
+ * 2) CPSC 359 Course Material, special thanks to Andrew Groene and Dr. Boyd.
  * 
  */
 
@@ -44,6 +44,8 @@
 
 // Define a struct for any peripheral device.
 
+typedef struct bcm2835_peripheral bcm2835_peripheral;
+
 struct bcm2835_peripheral {
 	unsigned long addr_p;
 	int mem_fd;
@@ -51,8 +53,8 @@ struct bcm2835_peripheral {
 	volatile unsigned int *addr;
 };
 
-extern struct bcm2835_peripheral gpio;
-extern struct bcm2835_peripheral bsc1;
+extern bcm2835_peripheral gpio;
+extern bcm2835_peripheral bsc1;
 
 // GPIO Setup macros. (Always use INP_GPIO(x) before using OUT_GPIO(x) or SET_GPIO_ALT(x,y)
 // g = GPIO#, and a = ALT# as defined by BCM2708 Manual. 
@@ -141,14 +143,14 @@ extern struct bcm2835_peripheral bsc1;
 
 //Function Prototypes
 
-int map_peripheral(struct bcm2835_peripheral *p);
-void unmap_peripheral(struct bcm2835_peripheral *p);
+int map_peripheral(bcm2835_peripheral *p);
+void unmap_peripheral(bcm2835_peripheral *p);
 
 // I2C
-void dump_bsc_status();
+//void dump_bsc_status();
 void wait_i2c_done();
 void i2c_init();
 
 //Priority
-int SetProgramPriority(int priorityLevel);
+//int SetProgramPriority(int priorityLevel);
 

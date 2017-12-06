@@ -12,14 +12,13 @@
 
 import explorerhat as hat
 import time
-import smbus
+import mySMBus as bus
 
 
 running = True
 
 add = 0x53
 reg = 0x00
-bus = smbus.SMBus()
 bus.open(1)
 devID = bus.read_byte_data(add, reg)
 
@@ -81,7 +80,9 @@ def quit2():
     powerSave = bus.read_byte_data(add, regPs)
     powerSave -= 8
     bus.write_byte_data(add, regPs, powerSave)
+    bus.close()
     pygame.quit()
+    
 
 
 # Detects if movement is detected in Z direction

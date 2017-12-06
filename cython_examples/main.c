@@ -1,3 +1,4 @@
+#include "smbus.h"
 #include <stdio.h>
 
 int main()
@@ -13,22 +14,22 @@ int main()
 	int counter = 0;
 	
 	
-	powerSave = read_byte(0x53, 0x2D);
+	powerSave = read_byte_data(0x53, 0x2D);
 	//turn on powersave
 	printf("Standby on: 0x%02x\n", powerSave);
 	
 	powerSave = powerSave + 8;
 	
-	write_byte(0x53, 0x2D, powerSave);
-	powerSave = read_byte(0x53, 0x2D);	
+	write_byte_data(0x53, 0x2D, powerSave);
+	powerSave = read_byte_data(0x53, 0x2D);	
 	printf("Standby off: 0x%02x\n", powerSave);
 
 	// Print out accelerometer data
-	while(counter < 100)
+	while(counter < 1000)
 	{
-		x = read_byte(0x53, 0x32);
-		y = read_byte(0x53, 0x34);		
-		z = read_byte(0x53, 0x36);	
+		x = read_byte_data(0x53, 0x32);
+		y = read_byte_data(0x53, 0x34);		
+		z = read_byte_data(0x53, 0x36);	
 		printf("(x,y,z) = (%.2f, %.2f, %.2f)\n", x, y, z);
 		
 		usleep(25000);
@@ -37,15 +38,15 @@ int main()
 	}
 	
 	powerSave = 0;
-	write_byte(0x53, 0x2D, powerSave);
-	powerSave = read_byte(0x53, 0x2D);
+	write_byte_data(0x53, 0x2D, powerSave);
+	powerSave = read_byte_data(0x53, 0x2D);
 	printf("Standby on: 0x%02x\n", powerSave);
 	
 	
 	
 	
 	int devID;
-	devID = read_byte(0x53, 0x00);
+	devID = read_byte_data(0x53, 0x00);
 	printf("DevID = 0x%02x\n", devID); 
 	uninit();
 	

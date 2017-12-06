@@ -1,16 +1,15 @@
 from distutils.core import setup
 from distutils.extension import Extension
-from Cython.Build import cythonize
 from Cython.Distutils import build_ext
 
-sourcefiles = ['smbus.pyx']
-ext_modules = [Extension("smbus", sourcefiles)]
+sourcefiles = ['mySMBus.pyx']
+ext_modules = [Extension("mySMBus", sourcefiles)]
 
 setup(
- name = 'New'
+ name = 'mySMBus',
  cmdclass = {'build_ext': build_ext},
  ext_modules = ext_modules
- }
+ )
  
  
 

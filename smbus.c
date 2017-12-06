@@ -13,77 +13,119 @@
  * 
  * Reference materials:
  * 1) https://github.com/Pieter-Jan/PJ_RPI
- * 2) CPSC 359 Course Material, special help from Andrew Groene and Dr. Boyd.
+ * 2) CPSC 359 Course Material, special thanks to Andrew Groene and Dr. Boyd.
  */
 
-#include "smbus.h" // Header file that contains all macros and definitions.
+// Macros
 
-struct bcm2835_peripheral gpio = {GPIO_BASE};
-struct bcm2835_peripheral bsc1 = {BSC1_BASE};
+#include <stdio.h>
+#include <stdlib.h>
 
+#include <string.h>
+#include <dirent.h>
+#include <fcntl.h>
+#include <assert.h>
+#include <sched.h>
 
+#include <sys/mman.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
-// Map Peripheral: Exposes the physical address of the RPI from the virtual address
-// using mmap on /dev/mem
+#include <unistd.h>
 
-int map_peripheral(struct bcm2835_peripheral *p)
-{
-	// Open /dev/mem
-	if((p->mem_fd = open("/dev/mem", O_RDWR|O_SYNC) ) < 0) {
-		printf("Failed to open /dev/mem. Try running the program again with sudo permissions.\n");
-		return -1;
-	}
-	
-	p->map = mmap(
-		NULL,
-		BLOCK_SIZE,
-		PROT_READ|PROT_WRITE,
-		MAP_SHARED,
-		p->mem_fd,   			// File descriptor to physical memory virtual file '/dev/mem'
-		p->addr_p				// Address in physical map, which we want this memory block to expose.
-	);
-		
-	if (p->map == MAP_FAILED) {
-		perror("mmap");
-		return -1;
-	}
-	
-	p->addr = (volatile unsigned int *)p->map;
-	
-	return 0;
-	
-}
+// GPIO Pin Definitions
+#define 	SDA1		2
+#define		SCL1		3
+
+// Definitions of memory addresses for GPIO and BSC1
+#define BCM2708_PERI_BASE		0x3F000000
+#define GPIO_BASE				(BCM2708_PERI_BASE + 0x200000) // GPIO Controller
+#define BSC1_BASE				(BCM2708_PERI_BASE + 0x804000) // I2C Controller
+
+#define BLOCK_SIZE				(4*1024)
 
 
+int fd;
+volatile unsigned int *bsc1;
+volatile unsigned int *gpio;
 
 
+#define GPIO_SET 			*(gpio[0] + 0b0111)   // Sets bits which are 1, ignores bits which are 0.
+#define GPIO_CLR			*(gpio[0] + 0b1010)   // Clears bits which are 1, ignores bits which are 0.
 
-// Unmap Peripheral: Unmaps the previously mapped memory addresses from a peripheral device.
-
-void unmap_peripheral(struct bcm2835_peripheral *p) {
-	
-	munmap(p->map, BLOCK_SIZE);
-	close(p->mem_fd);
-}
+#define GPIO_READ(g)		*(gpio[0] + 0b1101) &= (1<<(g)) 
 
 
+// I2C Addresses:
 
-// Dump BSC Status: Prints the status flags out for BSC1.
-void dump_bsc_status() {
-	
-	unsigned int s = BSC1_STATUS;
-	
-	printf("BSC1_STATUS: ERR=%d RXF=%d TXE=%d TXD=%d RXR=%d TXW=%d DONE=%d TA=%d\n",
-		(s & BSC_S_ERR) != 0,
-		(s & BSC_S_RXF) != 0,
-		(s & BSC_S_TXE) != 0,
-		(s & BSC_S_RXD) != 0,
-		(s & BSC_S_TXD) != 0,
-		(s & BSC_S_RXR) != 0,
-		(s & BSC_S_TXW) != 0,
-		(s & BSC_S_DONE) != 0,
-		(s & BSC_S_TA) != 0);
-}
+#define BSC1_CONTROL		bsc1[0]				         // Address for I2C Control: 
+                                                        // Used to enable interrupts, clear the FIFO,
+                                                        // define a read or write operation, and start
+                                                        // a transfer.
+                                                        
+#define BSC1_STATUS         bsc1[1]				        // Status register is used to record activity
+														// status, errors and interrupt requests.
+														
+#define BSC1_DLEN			bsc1[2]						// Data length register defines the number of 
+														// bytes of data to transmit or receive in the 
+														// I2C transfer. 
+
+#define BSC1_SLAVEADDR		bsc1[3]						// Slave Address register specifies the slave
+														// address and cycle type. (Slave is defined 
+														// as the peripheral device)
+														
+#define BSC1_FIFO			bsc1[4]						// FIFO (First In First Out) Register.
+														// Read cycles acces data received from the bus.
+														// Writes to the register adds to stack.
+														// Reads from register remove the next item.
+														
+// I2C Macros for setting bits:
+//(Note: Not all functions are defined here. Just what is required for the ADXL345 Accelerometer...
+// ... for details of every function, refer to BCM2835 ARM Peripherals manual)
+
+// Control Functions:
+#define BSC_C_I2CEN		(1 << 15)							// I2C Enable. 0 = BSC controller disabled. 1 = enabled
+#define BSC_C_ST		(1 << 7)							// ST = Start Transfer. 0 = No Action. 1 = Start a new transfer
+#define BSC_C_CLEAR		(1 << 4)							// CLEAR FIFO. 00 = No Action. 01, 10, or 11 = Clear FIFO
+#define BSC_C_READ		1									// READ Transfer. 0 = Write Packet Transfer. 1 = Read Packet Transfer
+
+#define START_READ		BSC_C_I2CEN|BSC_C_ST|BSC_C_CLEAR|BSC_C_READ		// Sets I2C up for reading data.
+#define START_WRITE		BSC_C_I2CEN|BSC_C_ST							// Sets I2C up for writing data.
+
+// Status Register Functions:
+#define BSC_S_CLKT		(1 << 9)							// CLKT Clock Stretch Timeout
+															// 0 = No errors detected. 1 = Slave has held the SCL signal
+															// low (clock stretching) for too long. Cleared by writing 1.
+														
+#define BSC_S_ERR		(1 << 8)							// ERR ACK Error
+															// 0 = No errors detected. 1 = Slave has not acknowledged its
+															// address. Cleared by writing 1.
+														
+#define BSC_S_RXF		(1 << 7)							// RXF - FIFO Full
+															// 0 = FIFO not full. 1 = FIFO is Full
+
+#define BSC_S_TXE		(1 << 6)							// TXE - FIFO Empty
+															// 0 = FIFO not empty. 1 = FIFO is full
+
+#define BSC_S_RXD		(1 << 5)							// RXD - FIFO contains Data
+															// 0 = FIFO is empty. 1 = FIFO contains at least 1 byte
+
+#define BSC_S_TXD		(1 << 4)							// TXD - FIFO can accept Data
+															// 0 = FIFO is full. The FIFO cannot accept more data.
+
+#define BSC_S_RXR		(1 << 3)							// RXR - FIFO needs Reading (full)
+															// 0 = FIFO is less than full and a read is underway.
+
+#define BSC_S_TXW		(1 << 2)							// TXW - FIFO needs Writing (full)
+															// 0 = FIFO is at least full and a write is underway.
+
+#define BSC_S_DONE		(1 << 1)							// DONE - Transfer Done. (1 = transfer complete)
+															// Cleared by writing 1 to the field.
+
+#define BSC_S_TA		1									// TA = Transfer Active. (0 = not active, 1 = active)
+
+
+#define CLEAR_STATUS	BSC_S_CLKT|BSC_S_ERR|BSC_S_DONE		// Clears the status flags
 
 
 // Wait I2C Done: Function that waits for the I2C transaction to complete.
@@ -98,69 +140,52 @@ void wait_i2c_done() {
 }
 
 
-// Sets GPIO2 and GPIO3 pins for initialization.
-void i2c_init()
-{
-	INP_GPIO(2);
-	SET_GPIO_ALT(2,0);
-	INP_GPIO(3);
-	SET_GPIO_ALT(3,0);
-}
-
-
-// Priority
-int SetProgramPriority(int priorityLevel)
-{
-	struct sched_param sched;
-	
-	memset (&sched, 0, sizeof(sched));
-	
-	if (priorityLevel > sched_get_priority_max (SCHED_RR))
-		priorityLevel = sched_get_priority_max (SCHED_RR);
-		
-	sched.sched_priority = priorityLevel;
-		
-	return sched_setscheduler (0, SCHED_RR, &sched);
-}
-
-
-
-// Initialize the bus by mapping the peripherals and setting GPIO 2 and GPIO 3.
+// Sets GPIO2 and GPIO3 pins for initialization, opens fd, and maps memory.
 int init()
 {
-	if(map_peripheral(&gpio) == -1) 
-	{
-       	 	printf("Failed to map the physical GPIO registers into the virtual memory space.\n");
-        	return -1;
-    }
+	if ((fd = open("/dev/mem", O_RDWR|O_SYNC) ) < 0) {
+		printf("Failed to open /dev/mem. Try again with sudo.\n");
+		return -1;
+	}
+	
+	gpio = (unsigned int *)mmap(NULL, BLOCK_SIZE, PROT_READ|PROT_WRITE,
+	MAP_SHARED, fd, GPIO_BASE);
+	
+	if (gpio == MAP_FAILED) {
+		perror("mmap");
+		return -1;
+	}
+	
+	printf( "mmap successful: %08x\n", GPIO_BASE);
+	
+	bsc1 = (unsigned int *)mmap(NULL, BLOCK_SIZE, PROT_READ|PROT_WRITE,
+	MAP_SHARED, fd, BSC1_BASE);
+	
+	if (gpio == MAP_FAILED) {
+		perror("mmap");
+		return -1;
+	}
+	
+	printf("mmap successful: %08x\n", GPIO_BASE);
 
-  printf( "mmap successful: %08x\n", GPIO_BASE );
-
-	if(map_peripheral(&bsc1) == -1) 
-	{
-       	 	printf("Failed to map the physical BSC1 registers into the virtual memory space.\n");
-        	return -1;
-    }
-
-  printf( "mmap successful: %08x\n", BSC1_BASE );
-
-  // Initialize the GPIO pins.
-  i2c_init();
-  
+	gpio[0] = gpio[0] & ~(0b111 << (SDA1 * 3));    // Clear GPIO2
+	gpio[0] = gpio[0] |  (0b100 << (SDA1 * 3));    // Set GPIO2 to ALT0
+	gpio[0] = gpio[0] & ~(0b111 << (SCL1 * 3));    // Clear GPIO3
+	gpio[0] = gpio[0] |  (0b100 << (SCL1 * 3));    // Set GPIO3 to ALT0
 }
 
-
-// Uninitialize the bus 
-
+// Unmaps memory and closes the fd.
 void uninit()
 {
-	unmap_peripheral(&gpio);
-	unmap_peripheral(&bsc1);
+munmap( (void*)bsc1, BLOCK_SIZE);
+munmap( (void*)gpio, BLOCK_SIZE);
+close(fd);
 }
+
 
 // Function for reading byte data
 
-unsigned char read_byte_data(unsigned char address, unsigned char regAddress) 
+unsigned char read_byte(unsigned char address, unsigned char regAddress) 
 {
   
   BSC1_STATUS = CLEAR_STATUS; 							// Clear CLKT, ERR, DONE flags
@@ -189,7 +214,7 @@ unsigned char read_byte_data(unsigned char address, unsigned char regAddress)
 }
 
 
-void write_byte_data(unsigned char address, unsigned char regAddress, unsigned char data)
+void write_byte(unsigned char address, unsigned char regAddress, unsigned char data)
 {
   BSC1_STATUS = CLEAR_STATUS; 							// Clear CLKT, ERR, DONE flags
   BSC1_SLAVEADDR = address;  							// Set peripheral address
