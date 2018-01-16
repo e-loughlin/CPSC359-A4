@@ -1,5 +1,5 @@
-# CPSC359-A4
-CPSC 359 - Computing Machinery II - Assignment 4: Raspberry Pi Game, Joystick, and Accelerometer Control
+# Computing Machinery II - Assignment 4
+Raspberry Pi Game, Joystick, and Accelerometer Control
 
 Assignment description:
 
